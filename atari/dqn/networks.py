@@ -1,5 +1,6 @@
 from torch import nn
 
+
 # ALGO LOGIC: initialize agent here:
 class BaselineQNetwork(nn.Module):
     def __init__(self, env):

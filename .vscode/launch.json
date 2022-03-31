@@ -1,0 +1,26 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Module",
+            "type": "python",
+            "request": "launch",
+            "module": "dqn_atari",
+            "args": ["--env-id", "PongNoFrameskip-v4", "--capture-video", "--seed", "1"],
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/atari"
+        },
+        {
+            "name": "DQN Mon",
+            "type": "python",
+            "request": "launch",
+            "module": "dqn_atari_mon",
+            "args": ["--env-id", "PongNoFrameskip-v4", "--capture-video", "--seed", "1", "--learning-starts", "1000"],
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/cleanrl"
+            // "env": {"PYTHONPATH": "./clearrl"}
+        },
+    ]

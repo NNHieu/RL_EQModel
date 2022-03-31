@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from dqn.networks import BaselineQNetwork
 from stable_baselines3.common.atari_wrappers import (
     ClipRewardEnv,
     EpisodicLifeEnv,
@@ -20,7 +21,7 @@ from stable_baselines3.common.atari_wrappers import (
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
-from atari.dqn.networks import BaselineQNetwork
+gym.logger.set_level(gym.logger.DEBUG)
 
 
 def parse_args():
@@ -44,6 +45,8 @@ def parse_args():
         help="weather to capture videos of the agent performances (check out `videos` folder)")
 
     # Algorithm specific arguments
+    parser.add_argument("--qnet-name", type=str, default="baseline",
+        help="the name of the Q-Network")
     parser.add_argument("--env-id", type=str, default="BreakoutNoFrameskip-v4",
         help="the id of the environment")
     parser.add_argument("--total-timesteps", type=int, default=10000000,
@@ -77,11 +80,13 @@ def parse_args():
 
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
-        env = gym.make(env_id)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
+        env = gym.make(env_id, render_mode="rgb_array")
+        if "render.modes" in env.metadata:
+            env.metadata["render_modes"] = env.metadata["render.modes"]
         if capture_video:
             if idx == 0:
                 env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
+        env = gym.wrappers.RecordEpisodeStatistics(env)
         env = NoopResetEnv(env, noop_max=30)
         env = MaxAndSkipEnv(env, skip=4)
         env = EpisodicLifeEnv(env)
@@ -101,15 +106,18 @@ def make_env(env_id, seed, idx, capture_video, run_name):
 
 # ALGO LOGIC: initialize agent here:
 
+
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     slope = (end_e - start_e) / duration
     return max(slope * t + start_e, end_e)
 
+
 def get_qnetwork(args):
-    if args.qnet == 'baseline':
+    if args.qnet_name == "baseline":
         return BaselineQNetwork
     else:
         raise ValueError
+
 
 if __name__ == "__main__":
     args = parse_args()
