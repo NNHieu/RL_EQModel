@@ -1,4 +1,4 @@
-name: base
+name: deqrl
 dependencies:
 - conda-forge::cudatoolkit=11.3.1
 - numpy=1.21.2
@@ -11,4 +11,5 @@ dependencies:
 - conda-forge::ffmpeg=4.3.2
 - conda-forge::x264=1!161.3030
 - tqdm=4.62.3
-- conda-forge::poetry=1.1.13
+- pip:
+  - gym==0.23.1
