@@ -21,7 +21,7 @@ from stable_baselines3.common.atari_wrappers import (
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
-gym.logger.set_level(gym.logger.DEBUG)
+# gym.logger.set_level(gym.logger.DEBUG)
 
 
 def parse_args():
@@ -81,12 +81,12 @@ def parse_args():
 def make_env(env_id, seed, idx, capture_video, run_name):
     def thunk():
         env = gym.make(env_id, render_mode="rgb_array")
+        env = gym.wrappers.RecordEpisodeStatistics(env)
         if "render.modes" in env.metadata:
             env.metadata["render_modes"] = env.metadata["render.modes"]
         if capture_video:
             if idx == 0:
                 env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-        env = gym.wrappers.RecordEpisodeStatistics(env)
         env = NoopResetEnv(env, noop_max=30)
         env = MaxAndSkipEnv(env, skip=4)
         env = EpisodicLifeEnv(env)
