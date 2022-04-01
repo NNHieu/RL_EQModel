@@ -11,6 +11,10 @@ dependencies:
 - conda-forge::ffmpeg=4.3.2
 - conda-forge::x264=1!161.3030
 - tqdm=4.62.3
+- conda-forge::glew
+- conda-forge::mesalib
+- menpo::glfw3
+# export CPATH=<path_to_conda>/envs/<ENV_NAME>/include
 - pip:
   - gym=0.23.1
   - ale-py=0.7.4
@@ -19,3 +23,5 @@ dependencies:
   - tensorboard=2.8.0
   - opencv-python==4.5.5.64
   - wandb==0.12.11
+  - mujoco_py==2.1.2.14
+  - patchelf==0.14.5.0
