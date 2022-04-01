@@ -188,7 +188,7 @@ if __name__ == "__main__":
                 writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                 writer.add_scalar("charts/epsilon", epsilon, global_step)
                 if args.qnet_name == "mon":
-                    monsp_stats = q_network.monconv.mon.stats
+                    monsp_stats = q_network.core.mon.stats
                     writer.add_scalar("mon_stats/fwd_iters_avg", monsp_stats.fwd_iters.avg, global_step)
                     writer.add_scalar("mon_stats/fwd_err_avg", monsp_stats.fwd_err.avg, global_step)
                     writer.add_scalar("mon_stats/fwd_time_avg", monsp_stats.fwd_time.avg, global_step)
