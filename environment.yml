@@ -17,3 +17,5 @@ dependencies:
   - autorom=0.4.2
   - stable-baselines3=1.1.0
   - tensorboard=2.8.0
+  - opencv-python==4.5.5.64
+  - wandb==0.12.11
