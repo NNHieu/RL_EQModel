@@ -187,6 +187,15 @@ if __name__ == "__main__":
                 print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
                 writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
                 writer.add_scalar("charts/epsilon", epsilon, global_step)
+                if args.qnet_name == "mon":
+                    monsp_stats = q_network.monconv.mon.stats
+                    writer.add_scalar("mon_stats/fwd_iters_avg", monsp_stats.fwd_iters.avg, global_step)
+                    writer.add_scalar("mon_stats/fwd_err_avg", monsp_stats.fwd_err.avg, global_step)
+                    writer.add_scalar("mon_stats/fwd_time_avg", monsp_stats.fwd_time.avg, global_step)
+                    writer.add_scalar("mon_stats/bkwd_iters_avg", monsp_stats.bkwd_iters.avg, global_step)
+                    writer.add_scalar("mon_stats/bkwd_err_avg", monsp_stats.bkwd_err.avg, global_step)
+                    writer.add_scalar("mon_stats/bkwd_time_avg", monsp_stats.bkwd_time.avg, global_step)
+                    monsp_stats.reset()
                 break
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `terminal_observation`
