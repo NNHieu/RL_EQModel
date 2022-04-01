@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from dqn.networks import BaselineQNetwork
+from dqn.networks import BaselineQNetwork, QMon, QRecurNetwork
 from stable_baselines3.common.atari_wrappers import (
     ClipRewardEnv,
     EpisodicLifeEnv,
@@ -115,6 +115,10 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
 def get_qnetwork(args):
     if args.qnet_name == "baseline":
         return BaselineQNetwork
+    elif args.qnet_name == "mon":
+        return QMon
+    elif args.qnet_name == "recur":
+        return QRecurNetwork
     else:
         raise ValueError
 
