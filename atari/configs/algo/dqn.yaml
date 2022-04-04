@@ -1,0 +1,5 @@
+defaults:
+  - qnet: mondeq.yaml
+  
+name: dqn
+buffer_size: 100000

@@ -3,6 +3,7 @@ import os
 import random
 import time
 from distutils.util import strtobool
+from functools import partial
 
 import gym
 import numpy as np
@@ -112,66 +113,82 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     return max(slope * t + start_e, end_e)
 
 
-def get_qnetwork(args):
-    if args.qnet_name == "baseline":
-        return BaselineQNetwork
-    elif args.qnet_name == "mon":
-        return QMon
-    elif args.qnet_name == "recur":
-        return QRecurNetwork
+def get_qnetwork(qnet_args, env):
+    out_features = env.single_action_space.nnv
+    if qnet_args.name == "baseline":
+        return partial(BaselineQNetwork, out_features)
+    elif qnet_args.name == "mondeq":
+        return partial(QMon, out_features, qnet_args.m, qnet_args.alpha, qnet_args.tol, qnet_args.max_iters)
+    elif qnet_args.name == "recur":
+        return partial(QRecurNetwork, out_features, qnet_args.num_iters)
     else:
         raise ValueError
 
 
-if __name__ == "__main__":
-    args = parse_args()
-    run_name = f"{args.env_id}__{args.exp_name}_{args.qnet_name}__{args.seed}__{int(time.time())}"
-    if args.track:
-        import wandb
+def init_wanda(config):
+    wandb_cfg = config.logger.wandb
+    import wandb
 
-        wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=True,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=True,
-            save_code=True,
-        )
-    writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    wandb.init(
+        project=wandb_cfg.project_name,
+        entity=wandb_cfg.entity,
+        sync_tensorboard=True,
+        config=vars(config),
+        name=config.name,
+        monitor_gym=True,
+        save_code=True,
     )
 
-    # TRY NOT TO MODIFY: seeding
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+def seed_all(seed, is_deterministic):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = is_deterministic
+
+
+def main(config):
+    # args = parse_args()
+    # config.name = f"{args.env_id}__{args.exp_name}_{args.qnet_name}__{args.seed}__{int(time.time())}"
+    if config.logger.get("wandb"):
+        init_wanda(config)
+
+    writer = SummaryWriter(f"runs/{config.name}")
+    # writer.add_text(
+    #     "hyperparameters",
+    #     "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    # )
+
+    # TRY NOT TO MODIFY: seeding
+    seed_all(config.seed, config.torch_deterministic)
+    device = torch.device("cuda" if torch.cuda.is_available() and config.cuda else "cpu")
 
     # env setup
-    envs = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, args.capture_video, run_name)])
+    envs = gym.vector.SyncVectorEnv([make_env(config.env, 0, 0, config.capture_video, config.name)])
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    QNetwork = get_qnetwork(args)
-    q_network = QNetwork(envs).to(device)
-    optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
-    target_network = QNetwork(envs).to(device)
+    QNetwork = get_qnetwork(config.algo.qnet, envs)
+    q_network = QNetwork().to(device)
+    optimizer = optim.Adam(q_network.parameters(), lr=config.opt.lr)
+    target_network = QNetwork().to(device)
     target_network.load_state_dict(q_network.state_dict())
 
     rb = ReplayBuffer(
-        args.buffer_size, envs.single_observation_space, envs.single_action_space, device=device, optimize_memory_usage=True
+        config.algo.buffer_size,
+        envs.single_observation_space,
+        envs.single_action_space,
+        device=device,
+        optimize_memory_usage=True,
     )
     start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
     obs = envs.reset()
-    for global_step in range(args.total_timesteps):
+    for global_step in range(config.opt.total_timesteps):
         # ALGO LOGIC: put action logic here
-        epsilon = linear_schedule(args.start_e, args.end_e, args.exploration_fraction * args.total_timesteps, global_step)
+        epsilon = linear_schedule(
+            config.opt.start_e, config.opt.end_e, args.exploration_fraction * args.total_timesteps, global_step
+        )
         if random.random() < epsilon:
             actions = np.array([envs.single_action_space.sample() for _ in range(envs.num_envs)])
         else:
@@ -235,3 +252,7 @@ if __name__ == "__main__":
 
     envs.close()
     writer.close()
+
+
+if __name__ == "__main__":
+    main()
