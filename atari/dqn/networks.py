@@ -8,7 +8,7 @@ from .deq.mon import splitting as sp
 
 # ALGO LOGIC: initialize agent here:
 class BaselineQNetwork(nn.Module):
-    def __init__(self, env):
+    def __init__(self, out_features):
         super(BaselineQNetwork, self).__init__()
         self.pre = nn.Sequential(
             nn.Conv2d(4, 32, 8, stride=4),
@@ -24,7 +24,7 @@ class BaselineQNetwork(nn.Module):
             nn.Flatten(),
             nn.Linear(3136, 512),
             nn.ReLU(),
-            nn.Linear(512, env.single_action_space.n),
+            nn.Linear(512, out_features),
         )
 
     def forward(self, x):
@@ -35,7 +35,7 @@ class BaselineQNetwork(nn.Module):
 
 
 # ------------------------------------- Mon DEQ -----------------------------------------
-MON_DEFAULTS = {"alpha": 1.0, "tol": 1e-3, "max_iter": 30}
+MON_DEFAULTS = {"alpha": 1.0, "tol": 1e-5, "max_iter": 50}
 
 
 def expand_args(defaults, kwargs):
@@ -46,7 +46,7 @@ def expand_args(defaults, kwargs):
 
 
 class MonDEQConv2d(nn.Module):
-    def __init__(self, splittingMethod: sp.MONPeacemanRachford, in_dim=28, in_channels=1, out_channels=32, m=0.1, **kwargs):
+    def __init__(self, splittingMethod: sp.MONPeacemanRachford, in_dim, in_channels, out_channels, m=0.1, **kwargs):
         super().__init__()
         n = in_dim
         shp = (n, n)
@@ -66,7 +66,7 @@ class MonDEQConv2d(nn.Module):
 
 # ALGO LOGIC: initialize agent here:
 class QMon(nn.Module):
-    def __init__(self, env):
+    def __init__(self, out_features, m, alpha, tol, max_iter):
         super(QMon, self).__init__()
         self.pre = nn.Sequential(
             nn.Conv2d(4, 32, 8, stride=4),
@@ -74,12 +74,15 @@ class QMon(nn.Module):
             nn.Conv2d(32, 64, 4, stride=2),
             nn.ReLU(),
         )
-        self.core = MonDEQConv2d(sp.MONPeacemanRachford, in_dim=9, in_channels=64, out_channels=64)
+        self.core = MonDEQConv2d(
+            sp.MONPeacemanRachford, in_dim=9, in_channels=64, out_channels=64, m=m, alpha=alpha, tol=tol, max_iter=max_iter
+        )
         self.post = nn.Sequential(
             nn.Flatten(),
             nn.Linear(3136, 512),
             nn.ReLU(),
-            nn.Linear(512, env.single_action_space.n),
+            # nn.Linear(512, env.single_action_space.n),
+            nn.Linear(512, out_features),
         )
 
     def forward(self, x):
@@ -103,7 +106,7 @@ class InjectLayer(nn.Module):
 
 # ALGO LOGIC: initialize agent here:
 class QRecurNetwork(nn.Module):
-    def __init__(self, env, num_iters=10):
+    def __init__(self, out_feature, num_iters=10):
         super(QRecurNetwork, self).__init__()
         self.pre = nn.Sequential(
             nn.Conv2d(4, 32, 8, stride=4),
@@ -117,7 +120,7 @@ class QRecurNetwork(nn.Module):
             nn.Flatten(),
             nn.Linear(3136, 512),
             nn.ReLU(),
-            nn.Linear(512, env.single_action_space.n),
+            nn.Linear(512, out_feature),
         )
         self.num_iters = num_iters
 
@@ -125,10 +128,10 @@ class QRecurNetwork(nn.Module):
         if num_iters is None:
             num_iters = self.num_iters
 
-        x = self.pre_mon(x / 255.0)
+        x = self.pre(x / 255.0)
         out = torch.zeros_like(x)
         for i in range(num_iters):
             out = self.core(out, x)
         out = out[:, :, 1:-1, 1:-1]
-        out = self.post_mon(out)
+        out = self.post(out)
         return out

@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 import os
 import random
 import time
@@ -45,8 +46,28 @@ def parse_args():
         help="weather to capture videos of the agent performances (check out `videos` folder)")
 
     # Algorithm specific arguments
-    parser.add_argument("--qnet-name", type=str, default="baseline",
-        help="the name of the Q-Network")
+    parser.add_argument("--qnet-name", 
+                        choices=['baseline', 'recur', 'mondeq'], 
+                        default="baseline",
+                        help="The name of the Q-Network. Available value: [baseline, recur, mondeq]")
+    
+    parser.add_argument("--mon-solver-alpha", type=float,
+                        default=1.0,
+                        help="monDEQ solver parameter - alpha")
+    parser.add_argument("--mon-solver-tol", type=float,
+                        default=1e-4,
+                        help="monDEQ solver parameter - tolerent")
+    parser.add_argument("--mon-solver-max-iters", type=int,
+                        default=50,
+                        help="monDEQ solver parameter - Max iterations")
+    parser.add_argument("--mon-model-m", type=float,
+                        default=0.1,
+                        help="monDEQ parameter - m")
+    
+    parser.add_argument("--recur-model-num-iters", type=int,
+                        default=10,
+                        help="recur model parameter - Number of iters")
+
     parser.add_argument("--env-id", type=str, default="BreakoutNoFrameskip-v4",
         help="the id of the environment")
     parser.add_argument("--total-timesteps", type=int, default=10000000,
@@ -112,16 +133,31 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
     return max(slope * t + start_e, end_e)
 
 
-def get_qnetwork(args):
-    if args.qnet_name == "baseline":
-        return BaselineQNetwork
-    elif args.qnet_name == "mon":
-        return QMon
-    elif args.qnet_name == "recur":
-        return QRecurNetwork
+# def get_qnetwork(args):
+#     if args.qnet_name == "baseline":
+#         return BaselineQNetwork
+#     elif args.qnet_name == "mon":
+#         return QMon
+#     elif args.qnet_name == "recur":
+#         return QRecurNetwork
+#     else:
+#         raise ValueError
+
+def get_qnetwork(qnet_args, env):
+    out_features = env.single_action_space.n
+    if qnet_args.qnet_name == "baseline":
+        return partial(BaselineQNetwork, out_features)
+    elif qnet_args.qnet_name == "mondeq":
+        m = qnet_args.mon_model_m
+        alpha = qnet_args.mon_solver_alpha
+        tol = qnet_args.mon_solver_tol
+        max_iters = qnet_args.mon_solver_max_iters
+
+        return partial(QMon, out_features, m, alpha, tol, max_iters)
+    elif qnet_args.qnet_name == "recur":
+        return partial(QRecurNetwork, out_features, qnet_args.recur_model_num_iters)
     else:
         raise ValueError
-
 
 if __name__ == "__main__":
     args = parse_args()
@@ -156,10 +192,10 @@ if __name__ == "__main__":
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
 
-    QNetwork = get_qnetwork(args)
-    q_network = QNetwork(envs).to(device)
+    QNetwork = get_qnetwork(args, envs)
+    q_network = QNetwork().to(device)
     optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
-    target_network = QNetwork(envs).to(device)
+    target_network = QNetwork().to(device)
     target_network.load_state_dict(q_network.state_dict())
 
     rb = ReplayBuffer(
