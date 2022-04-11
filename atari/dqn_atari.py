@@ -27,7 +27,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
     # fmt: off
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--exp-name", type=str, default=os.path.basename(__file__).rstrip(".py"),
         help="the name of this experiment")
     parser.add_argument("--seed", type=int, default=1,
@@ -56,7 +56,7 @@ def parse_args():
                         help="monDEQ solver parameter - alpha")
     parser.add_argument("--mon-solver-tol", type=float,
                         default=1e-4,
-                        help="monDEQ solver parameter - tolerent")
+                        help="monDEQ solver parameter - tolerant")
     parser.add_argument("--mon-solver-max-iters", type=int,
                         default=50,
                         help="monDEQ solver parameter - Max iterations")
