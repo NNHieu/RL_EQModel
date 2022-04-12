@@ -21,3 +21,4 @@ dependencies:
   - opencv-python==4.5.5.64
   - wandb==0.12.11
   - pygame==2.1.2
+  - bayesian-optimization==1.2.0
