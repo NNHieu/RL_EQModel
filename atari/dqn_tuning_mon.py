@@ -11,6 +11,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from bayes_opt import BayesianOptimization
+from bayes_opt.event import Events
+from bayes_opt.logger import JSONLogger
 from dqn.networks import BaselineQNetwork, QMon, QRecurNetwork
 from stable_baselines3.common.atari_wrappers import (
     ClipRewardEnv,
@@ -20,7 +23,6 @@ from stable_baselines3.common.atari_wrappers import (
     NoopResetEnv,
 )
 from stable_baselines3.common.buffers import ReplayBuffer
-from torch.utils.tensorboard import SummaryWriter
 
 # gym.logger.set_level(gym.logger.DEBUG)
 
@@ -155,45 +157,18 @@ def seed_all(seed, torch_deterministic):
     torch.backends.cudnn.deterministic = torch_deterministic
 
 
-def log_episode(writer, global_step, info, epsilon, q_network):
-    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-    writer.add_scalar("charts/epsilon", epsilon, global_step)
-    if args.qnet_name == "mon":
-        monsp_stats = q_network.core.mon.stats
-        writer.add_scalar("mon_stats/fwd_iters_avg", monsp_stats.fwd_iters.avg, global_step)
-        writer.add_scalar("mon_stats/fwd_err_avg", monsp_stats.fwd_err.avg, global_step)
-        writer.add_scalar("mon_stats/fwd_time_avg", monsp_stats.fwd_time.avg, global_step)
-        writer.add_scalar("mon_stats/bkwd_iters_avg", monsp_stats.bkwd_iters.avg, global_step)
-        writer.add_scalar("mon_stats/bkwd_err_avg", monsp_stats.bkwd_err.avg, global_step)
-        writer.add_scalar("mon_stats/bkwd_time_avg", monsp_stats.bkwd_time.avg, global_step)
-        monsp_stats.reset()
-
-
-def main(args):
+def bo_func(args, learning_rate, mon_model_m, mon_solver_tol):
     run_name = f"{args.env_id}__{args.exp_name}_{args.qnet_name}__{args.seed}__{int(time.time())}"
-    if args.track:
-        import wandb
+    if learning_rate is not None:
+        args.learning_rate = learning_rate
+    if mon_model_m is not None:
+        args.mon_model_m = mon_model_m
+    if mon_solver_tol is not None:
+        args.mon_solver_tol = mon_solver_tol
+    running_reward = None
 
-        wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=True,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=True,
-            save_code=True,
-        )
-    writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    )
-
-    # TRY NOT TO MODIFY: seeding
     seed_all(args.seed, args.torch_deterministic)
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
-
     # env setup
     envs = gym.vector.SyncVectorEnv([make_env(args.env_id, 0, 0, args.capture_video, run_name)])
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
@@ -207,7 +182,6 @@ def main(args):
     rb = ReplayBuffer(
         args.buffer_size, envs.single_observation_space, envs.single_action_space, device=device, optimize_memory_usage=True
     )
-    start_time = time.time()
 
     # TRY NOT TO MODIFY: start the game
     obs = envs.reset()
@@ -226,7 +200,10 @@ def main(args):
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         for info in infos:
             if "episode" in info.keys():
-                log_episode(writer, global_step, info, epsilon, q_network)
+                # log_episode(writer, global_step, info, q_network)
+                running_reward = (
+                    info["episode"]["r"] if running_reward is None else running_reward * 0.99 + info["episode"]["r"] * 0.01
+                )
                 break
 
         # TRY NOT TO MODIFY: save data to reply buffer; handle `terminal_observation`
@@ -248,11 +225,11 @@ def main(args):
             old_val = q_network(data.observations).gather(1, data.actions).squeeze()
             loss = F.mse_loss(td_target, old_val)
 
-            if global_step % 100 == 0:
-                writer.add_scalar("losses/td_loss", loss, global_step)
-                writer.add_scalar("losses/q_values", old_val.mean().item(), global_step)
-                # print("SPS:", int(global_step / (time.time() - start_time)))
-                writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+            # if global_step % 100 == 0:
+            #     writer.add_scalar("losses/td_loss", loss, global_step)
+            #     writer.add_scalar("losses/q_values", old_val.mean().item(), global_step)
+            #     # print("SPS:", int(global_step / (time.time() - start_time)))
+            #     writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
             # optimize the model
             optimizer.zero_grad()
@@ -263,11 +240,30 @@ def main(args):
             # update the target network
             if global_step % args.target_network_frequency == 0:
                 target_network.load_state_dict(q_network.state_dict())
-
     envs.close()
-    writer.close()
+    return running_reward
 
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args)
+    # Bounded region of parameter space
+    pbounds = {"learning_rate": (1e-5, 1e-3)}
+
+    def black_box_function(learning_rate):
+        bo_func(args, learning_rate, None, None)
+
+    optimizer = BayesianOptimization(
+        f=black_box_function,
+        pbounds=pbounds,
+        verbose=2,  # verbose = 1 prints only when a maximum is observed, verbose = 0 is silent
+        random_state=1,
+    )
+
+    logger = JSONLogger(path="./atadqnmon_tuning_logs.json")
+    optimizer.subscribe(Events.OPTIMIZATION_STEP, logger)
+
+    optimizer.maximize(
+        init_points=2,
+        n_iter=3,
+    )
+    print(optimizer.max)
