@@ -250,7 +250,7 @@ if __name__ == "__main__":
     pbounds = {"learning_rate": (1e-5, 1e-3)}
 
     def black_box_function(learning_rate):
-        bo_func(args, learning_rate, None, None)
+        return bo_func(args, learning_rate, None, None)
 
     optimizer = BayesianOptimization(
         f=black_box_function,
