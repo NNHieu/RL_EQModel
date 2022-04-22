@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from dqn.networks import BaselineQNetwork, QMon, QRecurNetwork
+from dqn.networks import BaselineQNetwork, NetworkName, QMon, QRecurNetwork
 from stable_baselines3.common.atari_wrappers import (
     ClipRewardEnv,
     EpisodicLifeEnv,
@@ -133,16 +133,16 @@ def linear_schedule(start_e: float, end_e: float, duration: int, t: int):
 
 def get_qnetwork(qnet_args, env):
     out_features = env.single_action_space.n
-    if qnet_args.qnet_name == "baseline":
+    if qnet_args.qnet_name == NetworkName.BASELINE:
         return partial(BaselineQNetwork, out_features)
-    elif qnet_args.qnet_name == "mondeq":
+    elif qnet_args.qnet_name == NetworkName.MONDEQ:
         m = qnet_args.mon_model_m
         alpha = qnet_args.mon_solver_alpha
         tol = qnet_args.mon_solver_tol
         max_iters = qnet_args.mon_solver_max_iters
 
         return partial(QMon, out_features, m, alpha, tol, max_iters)
-    elif qnet_args.qnet_name == "recur":
+    elif qnet_args.qnet_name == NetworkName.RECUR:
         return partial(QRecurNetwork, out_features, qnet_args.recur_model_num_iters)
     else:
         raise ValueError
@@ -159,7 +159,7 @@ def log_episode(writer, global_step, info, epsilon, q_network):
     print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
     writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
     writer.add_scalar("charts/epsilon", epsilon, global_step)
-    if args.qnet_name == "mon":
+    if args.qnet_name == NetworkName.MONDEQ:
         monsp_stats = q_network.core.mon.stats
         writer.add_scalar("mon_stats/fwd_iters_avg", monsp_stats.fwd_iters.avg, global_step)
         writer.add_scalar("mon_stats/fwd_err_avg", monsp_stats.fwd_err.avg, global_step)

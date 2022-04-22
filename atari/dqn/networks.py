@@ -6,6 +6,12 @@ from .deq.mon import mon
 from .deq.mon import splitting as sp
 
 
+class NetworkName(object):
+    BASELINE = "baseline"
+    MONDEQ = "mondeq"
+    RECUR = "recur"
+
+
 # ALGO LOGIC: initialize agent here:
 class BaselineQNetwork(nn.Module):
     def __init__(self, out_features):
